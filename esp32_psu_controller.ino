@@ -98,6 +98,22 @@ String displayStateValue;
 String inputMessage;
 String inputParam;
 
+volatile bool onPressed = false;
+volatile bool offPressed = false;
+volatile bool trianglePressed = false;
+
+void IRAM_ATTR handleOnPress() {
+  onPressed = true;
+}
+
+void IRAM_ATTR handleOffPress() {
+  offPressed = true;
+}
+
+void IRAM_ATTR handleTrianglePress() {
+  trianglePressed = true;
+}
+
 void getSensorReadings() {
   adc0 = ads.readADC_SingleEnded(1);
   adc1 = ads.readADC_SingleEnded(0);
@@ -354,6 +370,10 @@ void setup() {
   pinMode(YELLOW_LED, OUTPUT);
   digitalWrite(YELLOW_LED, LOW);
 
+  attachInterrupt(digitalPinToInterrupt(ON_BUTTON), handleOnPress, FALLING);
+  attachInterrupt(digitalPinToInterrupt(OFF_BUTTON), handleOffPress, FALLING);
+  attachInterrupt(digitalPinToInterrupt(TRIANGLE_BUTTON), handleTrianglePress, FALLING);
+
   wifiManager.autoConnect("PSU_CONTROL");
   ArduinoOTA.setPort(3232);
   ArduinoOTA.setHostname("psu_controller");
@@ -495,6 +515,32 @@ void setup() {
 
 void loop() {
   ArduinoOTA.handle();
+  
+  if (onPressed) {
+    powerEnabled = true;
+    onPressed = false;
+    delay(50);
+    digitalWrite(POWER_SWITCH, powerEnabled);
+    digitalWrite(YELLOW_LED, powerEnabled);
+  }
+  if (offPressed) {
+    powerEnabled = false;
+    offPressed = false;
+    delay(50);
+    digitalWrite(POWER_SWITCH, powerEnabled);
+    digitalWrite(YELLOW_LED, powerEnabled);
+  }
+  if (trianglePressed) {
+    trianglePressed = false;
+    delay(50);
+    if (displaystate) {
+      u8g2.setPowerSave(0);
+      displaystate = false;
+    } else {
+      u8g2.setPowerSave(1);
+      displaystate = true;
+    }
+  }
 
   unsigned long currentTime = millis();
   if (currentTime - lastSampleTime >= sampleInterval) {
@@ -511,25 +557,6 @@ void loop() {
       float iVoltagee = averageI*VOLT_PER_COUNT - 2.53;
       voltage = averageV*VOLT_PER_COUNT*7.948;
       current = iVoltagee/0.114;
-      if (digitalRead(ON_BUTTON) == LOW) {
-        powerEnabled = true;
-        digitalWrite(POWER_SWITCH, powerEnabled);
-        digitalWrite(YELLOW_LED, powerEnabled);
-      }
-      if (digitalRead(OFF_BUTTON) == LOW) {
-        powerEnabled = false;
-        digitalWrite(POWER_SWITCH, powerEnabled);
-        digitalWrite(YELLOW_LED, powerEnabled);
-      }
-      if (digitalRead(TRIANGLE_BUTTON) == LOW) {
-        if (displaystate) {
-          u8g2.setPowerSave(0);
-          displaystate = false;
-        } else {
-          u8g2.setPowerSave(1);
-          displaystate = true;
-        }
-      }
       u8g2.clearBuffer();
       u8g2.setFont(u8g2_font_t0_12_tf);  
       u8g2.drawStr(1, 10, "Voltage:");
